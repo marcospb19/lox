@@ -32,7 +32,7 @@ pub struct Scanner<'a> {
     chars: Chars<'a>,
     /// Current line.
     line: usize,
-    /// Has made any error (TODO maybe this should be removed).
+    /// Has made any error (TODO: maybe this should be removed).
     has_failed: bool,
 }
 
@@ -50,8 +50,15 @@ impl<'a> Scanner<'a> {
         self.chars.as_str().is_empty()
     }
 
-    fn advance(&mut self) -> char {
-        self.advance_checked().unwrap_or('\0')
+    /// Get lemexe for just parsed token.
+    fn token_lexeme(&mut self) -> &str {
+        let span_length = self.token_start.len() - self.chars.as_str().len();
+        &self.token_start[..span_length]
+    }
+
+    /// Reset span start for the next token, to be used in `token_lexeme`.
+    fn reset_token(&mut self) {
+        self.token_start = self.chars.as_str();
     }
 
     fn advance_checked(&mut self) -> Option<char> {
@@ -60,6 +67,10 @@ impl<'a> Scanner<'a> {
             self.line += 1;
         }
         ch
+    }
+
+    fn advance(&mut self) -> char {
+        self.advance_checked().unwrap_or('\0')
     }
 
     fn advance_while(&mut self, f: impl Fn(char) -> bool) {
@@ -80,34 +91,31 @@ impl<'a> Scanner<'a> {
         self.chars.clone().nth(1).unwrap_or('\0')
     }
 
-    // Check if matches pattern, and consumes the pattern.
+    /// Check if matches pattern, and if so, consumes the pattern.
     fn matches(&mut self, pattern: &str) -> bool {
         let matches = self.chars.as_str().starts_with(pattern);
 
         if matches {
-            // Chars is skipping pattern.len() bytes
+            // chars is skipping pattern.len() bytes
             self.chars = self.chars.as_str()[pattern.len()..].chars();
         }
 
         matches
     }
 
-    fn reset_token(&mut self) {
-        self.token_start = self.chars.as_str();
-    }
-
-    fn identifier(&mut self) -> TokenType {
+    /// Consume an identifier and check if it is a keyword.
+    fn consume_identifier(&mut self) -> TokenType {
         self.advance_while(char::is_alphanumeric);
 
-        let text = self.token_slice();
+        let lexeme = self.token_lexeme();
 
-        match KEYWORDS.get(text) {
+        match KEYWORDS.get(lexeme) {
             Some(keyword_token) => keyword_token.clone(),
             None => TokenType::Identifier,
         }
     }
 
-    fn string(&mut self) -> TokenType {
+    fn consume_string(&mut self) -> TokenType {
         self.advance_while(|ch| ch != '"');
 
         if self.is_at_end() {
@@ -119,16 +127,11 @@ impl<'a> Scanner<'a> {
         self.advance();
 
         // Trim the surrounding quotes.
-        let string = self.token_slice().trim_matches('"');
+        let string = self.token_lexeme().trim_matches('"');
         TokenType::String(string.into())
     }
 
-    fn token_slice(&mut self) -> &str {
-        let span_length = self.token_start.len() - self.chars.as_str().len();
-        &self.token_start[..span_length]
-    }
-
-    fn number(&mut self) -> TokenType {
+    fn consume_number(&mut self) -> TokenType {
         self.advance_while(|ch| ch.is_ascii_digit());
 
         // Look for a fractional part.
@@ -139,15 +142,15 @@ impl<'a> Scanner<'a> {
             self.advance_while(|ch| ch.is_ascii_digit());
         }
 
-        let number: f64 = self.token_slice().parse().expect("Decimal parse error.");
+        let number: f64 = self.token_lexeme().parse().expect("Decimal parse error.");
         TokenType::Number(number)
     }
 
     fn error(&mut self, line: usize, message: impl ToString) {
-        self.has_failed = true;
         fn report(line: usize, where_: String, message: String) {
             eprintln!("[line {line}] Error{where_}: {message}");
         }
+        self.has_failed = true;
         report(line, "".to_string(), message.to_string());
     }
 }
@@ -191,16 +194,16 @@ impl Iterator for Scanner<'_> {
                 '<' => break Less,
                 '>' => break Greater,
                 '/' => break Slash,
-                '"' => break self.string(),
-                '0'..='9' => break self.number(),
-                c if c.is_alphabetic() => break self.identifier(),
+                '"' => break self.consume_string(),
+                '0'..='9' => break self.consume_number(),
+                c if c.is_alphabetic() => break self.consume_identifier(),
                 c if c.is_whitespace() => self.reset_token(),
                 _ => self.error(self.line, "Unexpected character."),
             }
         };
 
-        let token_text = self.token_slice().to_owned();
-        Some(Token::new(token_type, token_text, self.line))
+        let token_lexeme = self.token_lexeme().to_owned();
+        Some(Token::new(token_type, token_lexeme, self.line))
     }
 }
 
