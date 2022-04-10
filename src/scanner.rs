@@ -2,7 +2,7 @@ use std::str::Chars;
 
 use phf::phf_map;
 
-use crate::token::{Token, TokenType};
+use crate::token::{Position, Token, TokenType};
 
 /// Compiler-time generated map of keywords.
 static KEYWORDS: phf::Map<&'static str, TokenType> = phf_map! {
@@ -30,8 +30,8 @@ pub struct Scanner<'a> {
     token_start: &'a str,
     /// Source code char-by-char iterator.
     chars: Chars<'a>,
-    /// Current line.
-    line: usize,
+    /// Current token start position.
+    position: Position,
     /// Has made any error (TODO: maybe this should be removed).
     has_failed: bool,
 }
@@ -41,7 +41,7 @@ impl<'a> Scanner<'a> {
         Self {
             token_start: source_code,
             chars: source_code.chars(),
-            line: 1,
+            position: Position::default(),
             has_failed: false,
         }
     }
@@ -57,15 +57,22 @@ impl<'a> Scanner<'a> {
     }
 
     /// Reset span start for the next token, to be used in `token_lexeme`.
-    fn reset_token(&mut self) {
+    ///
+    /// Returns the new position for the next token.
+    fn reset_token(&mut self) -> Position {
         self.token_start = self.chars.as_str();
+        self.position
     }
 
     fn advance_checked(&mut self) -> Option<char> {
         let ch = self.chars.next();
+
         if ch == Some('\n') {
-            self.line += 1;
+            self.position.advance_line();
+        } else {
+            self.position.advance_column();
         }
+
         ch
     }
 
@@ -96,8 +103,10 @@ impl<'a> Scanner<'a> {
         let matches = self.chars.as_str().starts_with(pattern);
 
         if matches {
-            // chars is skipping pattern.len() bytes
-            self.chars = self.chars.as_str()[pattern.len()..].chars();
+            // advance scanner cursor
+            for _ in pattern.chars() {
+                self.advance();
+            }
         }
 
         matches
@@ -111,7 +120,7 @@ impl<'a> Scanner<'a> {
 
         match KEYWORDS.get(lexeme) {
             Some(keyword_token) => keyword_token.clone(),
-            None => TokenType::Identifier,
+            None => TokenType::Identifier(lexeme.to_owned()),
         }
     }
 
@@ -119,7 +128,7 @@ impl<'a> Scanner<'a> {
         self.advance_while(|ch| ch != '"');
 
         if self.is_at_end() {
-            self.error(self.line, "Unterminated string.");
+            self.error("Unterminated string.");
             panic!();
         }
 
@@ -146,12 +155,12 @@ impl<'a> Scanner<'a> {
         TokenType::Number(number)
     }
 
-    fn error(&mut self, line: usize, message: impl ToString) {
-        fn report(line: usize, where_: String, message: String) {
-            eprintln!("[line {line}] Error{where_}: {message}");
+    fn error(&mut self, message: impl ToString) {
+        fn report(position: Position, where_: String, message: String) {
+            eprintln!("[line {position}] Error{where_}: {message}");
         }
         self.has_failed = true;
-        report(line, "".to_string(), message.to_string());
+        report(self.position, "".to_string(), message.to_string());
     }
 }
 
@@ -162,7 +171,7 @@ impl Iterator for Scanner<'_> {
         use TokenType::*;
 
         // Set the start of this token
-        self.reset_token();
+        let mut token_position = self.reset_token();
 
         let token_type = loop {
             if self.is_at_end() {
@@ -197,49 +206,66 @@ impl Iterator for Scanner<'_> {
                 '"' => break self.consume_string(),
                 '0'..='9' => break self.consume_number(),
                 c if c.is_alphabetic() => break self.consume_identifier(),
-                c if c.is_whitespace() => self.reset_token(),
-                _ => self.error(self.line, "Unexpected character."),
+                c if c.is_whitespace() => token_position = self.reset_token(),
+                _ => self.error("Unexpected character."),
             }
         };
 
-        let token_lexeme = self.token_lexeme().to_owned();
-        Some(Token::new(token_type, token_lexeme, self.line))
+        Some(Token::new(token_type, token_position))
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use TokenType::*;
+
     use super::*;
 
-    #[test]
     #[rustfmt::skip]
-    fn test_scanner() {
-        use TokenType::*;
-
-        let source_code = r#"// this is ignored
-            var average = !"text" + (min + max) / 2 or true and false;
-        "#;
+    #[test]
+    fn test_scanning_statement() {
+        let source_code = r#"var foo = !"text" + (min + max) / 2 or true and false;"#;
 
         let mut scanner = Scanner::new(source_code);
 
-        assert_eq!(scanner.next().unwrap(), Token::new(Var        , "var", 2));
-        assert_eq!(scanner.next().unwrap(), Token::new(Identifier , "average", 2));
-        assert_eq!(scanner.next().unwrap(), Token::new(Equal      , "=", 2));
-        assert_eq!(scanner.next().unwrap(), Token::new(Bang       , "!", 2));
-        assert_eq!(scanner.next().unwrap(), Token::new(String("text".into()), "\"text\"", 2));
-        assert_eq!(scanner.next().unwrap(), Token::new(Plus       , "+", 2));
-        assert_eq!(scanner.next().unwrap(), Token::new(LeftParen  , "(", 2));
-        assert_eq!(scanner.next().unwrap(), Token::new(Identifier , "min", 2));
-        assert_eq!(scanner.next().unwrap(), Token::new(Plus       , "+", 2));
-        assert_eq!(scanner.next().unwrap(), Token::new(Identifier , "max", 2));
-        assert_eq!(scanner.next().unwrap(), Token::new(RightParen , ")", 2));
-        assert_eq!(scanner.next().unwrap(), Token::new(Slash      , "/", 2));
-        assert_eq!(scanner.next().unwrap(), Token::new(Number(2.0), "2", 2));
-        assert_eq!(scanner.next().unwrap(), Token::new(Or         , "or", 2));
-        assert_eq!(scanner.next().unwrap(), Token::new(True       , "true", 2));
-        assert_eq!(scanner.next().unwrap(), Token::new(And        , "and", 2));
-        assert_eq!(scanner.next().unwrap(), Token::new(False      , "false", 2));
-        assert_eq!(scanner.next().unwrap(), Token::new(Semicolon  , ";", 2));
+        assert_eq!(scanner.next().unwrap(), Token::new(Var                     , Position::new(1, 1)));
+        assert_eq!(scanner.next().unwrap(), Token::new(Identifier("foo".into()), Position::new(1, 5)));
+        assert_eq!(scanner.next().unwrap(), Token::new(Equal                   , Position::new(1, 9)));
+        assert_eq!(scanner.next().unwrap(), Token::new(Bang                    , Position::new(1, 11)));
+        assert_eq!(scanner.next().unwrap(), Token::new(String("text".into())   , Position::new(1, 12)));
+        assert_eq!(scanner.next().unwrap(), Token::new(Plus                    , Position::new(1, 19)));
+        assert_eq!(scanner.next().unwrap(), Token::new(LeftParen               , Position::new(1, 21)));
+        assert_eq!(scanner.next().unwrap(), Token::new(Identifier("min".into()), Position::new(1, 22)));
+        assert_eq!(scanner.next().unwrap(), Token::new(Plus                    , Position::new(1, 26)));
+        assert_eq!(scanner.next().unwrap(), Token::new(Identifier("max".into()), Position::new(1, 28)));
+        assert_eq!(scanner.next().unwrap(), Token::new(RightParen              , Position::new(1, 31)));
+        assert_eq!(scanner.next().unwrap(), Token::new(Slash                   , Position::new(1, 33)));
+        assert_eq!(scanner.next().unwrap(), Token::new(Number(2.0)             , Position::new(1, 35)));
+        assert_eq!(scanner.next().unwrap(), Token::new(Or                      , Position::new(1, 37)));
+        assert_eq!(scanner.next().unwrap(), Token::new(True                    , Position::new(1, 40)));
+        assert_eq!(scanner.next().unwrap(), Token::new(And                     , Position::new(1, 45)));
+        assert_eq!(scanner.next().unwrap(), Token::new(False                   , Position::new(1, 49)));
+        assert_eq!(scanner.next().unwrap(), Token::new(Semicolon               , Position::new(1, 54)));
+        assert!(scanner.next().is_none());
+    }
+
+    #[rustfmt::skip]
+    #[test]
+    fn test_scanning_expression() {
+        let source_code = "1 - (2 * 3) < 4 == false";
+        let mut scanner = Scanner::new(source_code);
+
+        assert_eq!(scanner.next().unwrap(), Token::new(Number(1.0), Position::new(1, 1)));
+        assert_eq!(scanner.next().unwrap(), Token::new(Minus      , Position::new(1, 3)));
+        assert_eq!(scanner.next().unwrap(), Token::new(LeftParen  , Position::new(1, 5)));
+        assert_eq!(scanner.next().unwrap(), Token::new(Number(2.0), Position::new(1, 6)));
+        assert_eq!(scanner.next().unwrap(), Token::new(Star       , Position::new(1, 8)));
+        assert_eq!(scanner.next().unwrap(), Token::new(Number(3.0), Position::new(1, 10)));
+        assert_eq!(scanner.next().unwrap(), Token::new(RightParen , Position::new(1, 11)));
+        assert_eq!(scanner.next().unwrap(), Token::new(Less       , Position::new(1, 13)));
+        assert_eq!(scanner.next().unwrap(), Token::new(Number(4.0), Position::new(1, 15)));
+        assert_eq!(scanner.next().unwrap(), Token::new(EqualEqual , Position::new(1, 17)));
+        assert_eq!(scanner.next().unwrap(), Token::new(False      , Position::new(1, 20)));
         assert!(scanner.next().is_none());
     }
 
