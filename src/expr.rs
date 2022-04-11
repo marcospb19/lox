@@ -1,19 +1,32 @@
-use crate::token::{Token, TokenType};
+use std::fmt;
 
-pub trait Expression {}
+use crate::token::TokenType;
+
+pub trait Expression: fmt::Display {}
+
+impl Expression for BinaryExpression {}
+impl Expression for GroupingExpression {}
+impl Expression for LiteralExpression {}
+impl Expression for UnaryExpression {}
 
 pub struct BinaryExpression {
-    left: Box<dyn Expression>, operator: Token, right: Box<dyn Expression>
+    pub left: Box<dyn Expression>,
+    pub operator: TokenType,
+    pub right: Box<dyn Expression>,
 }
 
 impl BinaryExpression {
-    pub fn new(left: Box<dyn Expression>, operator: Token, right: Box<dyn Expression>) -> Self {
-        Self { left, operator, right }
+    pub fn new(left: Box<dyn Expression>, operator: TokenType, right: Box<dyn Expression>) -> Self {
+        Self {
+            left,
+            operator,
+            right,
+        }
     }
 }
 
 pub struct GroupingExpression {
-    expression: Box<dyn Expression>
+    pub expression: Box<dyn Expression>,
 }
 
 impl GroupingExpression {
@@ -23,7 +36,7 @@ impl GroupingExpression {
 }
 
 pub struct LiteralExpression {
-    value: TokenType
+    pub value: TokenType,
 }
 
 impl LiteralExpression {
@@ -33,12 +46,15 @@ impl LiteralExpression {
 }
 
 pub struct UnaryExpression {
-    operator: Token, expression: Box<dyn Expression>
+    pub operator: TokenType,
+    pub expression: Box<dyn Expression>,
 }
 
 impl UnaryExpression {
-    pub fn new(operator: Token, expression: Box<dyn Expression>) -> Self {
-        Self { operator, expression }
+    pub fn new(operator: TokenType, expression: Box<dyn Expression>) -> Self {
+        Self {
+            operator,
+            expression,
+        }
     }
 }
-

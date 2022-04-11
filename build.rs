@@ -8,18 +8,18 @@ use std::{
 const ASD: &[(&str, &str, &str)] = &[
     (
         "BinaryExpression",
-        "left: Box<dyn Expression>, operator: Token, right: Box<dyn Expression>",
+        "pub left: Box<dyn Expression>, pub operator: TokenType, pub right: Box<dyn Expression>",
         "left, operator, right",
     ),
     (
         "GroupingExpression",
-        "expression: Box<dyn Expression>",
+        "pub expression: Box<dyn Expression>",
         "expression",
     ),
-    ("LiteralExpression", "value: TokenType", "value"),
+    ("LiteralExpression", "pub value: TokenType", "value"),
     (
         "UnaryExpression",
-        "operator: Token, expression: Box<dyn Expression>",
+        "pub operator: TokenType, pub expression: Box<dyn Expression>",
         "operator, expression",
     ),
 ];
@@ -33,9 +33,16 @@ fn define_ast(name: &str, list: &[(&str, &str, &str)]) -> io::Result<()> {
     let path = format!("src/{name}.rs");
     let mut writer = fs::File::create(&path)?;
 
-    writeln!(writer, "use crate::token::{{Token, TokenType}};")?;
+    writeln!(writer, "use std::fmt;")?;
     writeln!(writer)?;
-    writeln!(writer, "pub trait Expression {{}}")?;
+    writeln!(writer, "use crate::token::TokenType;")?;
+    writeln!(writer)?;
+    writeln!(writer, "pub trait Expression: fmt::Display {{}}")?;
+    writeln!(writer)?;
+    writeln!(writer, "impl Expression for BinaryExpression {{}}")?;
+    writeln!(writer, "impl Expression for GroupingExpression {{}}")?;
+    writeln!(writer, "impl Expression for LiteralExpression {{}}")?;
+    writeln!(writer, "impl Expression for UnaryExpression {{}}")?;
     writeln!(writer)?;
 
     for (struct_name, typed_fields, untyped_fields) in list {
@@ -55,6 +62,7 @@ fn define_struct(
     writeln!(writer, "}}")?;
     writeln!(writer)?;
     writeln!(writer, "impl {struct_name} {{")?;
+    let typed_fields = typed_fields.replace("pub ", "");
     writeln!(writer, "    pub fn new({typed_fields}) -> Self {{")?;
     writeln!(writer, "        Self {{ {untyped_fields} }}")?;
     writeln!(writer, "    }}")?;

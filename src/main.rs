@@ -1,4 +1,7 @@
+#![feature(box_syntax)]
+
 mod expr;
+mod printer;
 mod scanner;
 mod token;
 

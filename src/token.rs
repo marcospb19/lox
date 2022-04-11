@@ -51,6 +51,54 @@ pub enum TokenType {
     While,
 }
 
+impl fmt::Display for TokenType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use TokenType::*;
+
+        let txt = match self {
+            Identifier(inner) | String(inner) => return write!(f, "{}", inner),
+            Number(inner) => return write!(f, "{}", inner),
+            LeftParen => "(",
+            RightParen => ")",
+            LeftBrace => "{",
+            RightBrace => "}",
+            Comma => ",",
+            Dot => ".",
+            Minus => "-",
+            Plus => "+",
+            Semicolon => ";",
+            Slash => "/",
+            Star => "*",
+            Bang => "!",
+            BangEqual => "!=",
+            Equal => "=",
+            EqualEqual => "==",
+            Greater => ">",
+            GreaterEqual => ">=",
+            Less => "<",
+            LessEqual => "<=",
+            Nil => "nil",
+            True => "true",
+            False => "false",
+            And => "and",
+            Class => "class",
+            Else => "else",
+            Fun => "fun",
+            For => "for",
+            If => "if",
+            Or => "or",
+            Print => "print",
+            Return => "return",
+            Super => "super",
+            This => "this",
+            Var => "var",
+            While => "while",
+        };
+
+        txt.fmt(f)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Token {
     token_type: TokenType,
@@ -66,6 +114,12 @@ impl Token {
     }
 }
 
+impl fmt::Display for Token {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.token_type.fmt(f)
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Position {
     pub line: usize,
@@ -73,6 +127,7 @@ pub struct Position {
 }
 
 impl Position {
+    #[cfg(test)]
     pub fn new(line: usize, column: usize) -> Self {
         Self { line, column }
     }
