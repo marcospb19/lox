@@ -1,6 +1,7 @@
 #![feature(box_syntax)]
 
 mod expr;
+mod parser;
 mod printer;
 mod scanner;
 mod token;

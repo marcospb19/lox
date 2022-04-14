@@ -1,41 +1,41 @@
-#![allow(unused)]
 use std::{
     fs,
     io::{self, Write},
-    path::Path,
 };
 
-const ASD: &[(&str, &str, &str)] = &[
+const DATA: &[(&str, &str, &str)] = &[
     (
         "BinaryExpression",
-        "pub left: Box<dyn Expression>, pub operator: TokenType, pub right: Box<dyn Expression>",
+        "pub left: ExpressionBox, pub operator: Token, pub right: ExpressionBox",
         "left, operator, right",
     ),
     (
         "GroupingExpression",
-        "pub expression: Box<dyn Expression>",
+        "pub expression: ExpressionBox",
         "expression",
     ),
-    ("LiteralExpression", "pub value: TokenType", "value"),
+    ("LiteralExpression", "pub value: Token", "value"),
     (
         "UnaryExpression",
-        "pub operator: TokenType, pub expression: Box<dyn Expression>",
+        "pub operator: Token, pub expression: ExpressionBox",
         "operator, expression",
     ),
 ];
 
 fn main() -> io::Result<()> {
     println!("cargo:rerun-if-changed=build.rs");
-    define_ast("expr", ASD)
+    define_ast("expr", DATA)
 }
 
 fn define_ast(name: &str, list: &[(&str, &str, &str)]) -> io::Result<()> {
     let path = format!("src/{name}.rs");
     let mut writer = fs::File::create(&path)?;
 
+    writeln!(writer, "#![cfg_attr(not(test), allow(unused))]")?;
+    writeln!(writer)?;
     writeln!(writer, "use std::fmt;")?;
     writeln!(writer)?;
-    writeln!(writer, "use crate::token::TokenType;")?;
+    writeln!(writer, "use crate::token::Token;")?;
     writeln!(writer)?;
     writeln!(writer, "pub trait Expression: fmt::Display {{}}")?;
     writeln!(writer)?;
@@ -43,6 +43,8 @@ fn define_ast(name: &str, list: &[(&str, &str, &str)]) -> io::Result<()> {
     writeln!(writer, "impl Expression for GroupingExpression {{}}")?;
     writeln!(writer, "impl Expression for LiteralExpression {{}}")?;
     writeln!(writer, "impl Expression for UnaryExpression {{}}")?;
+    writeln!(writer)?;
+    writeln!(writer, "type ExpressionBox = Box<dyn Expression>;")?;
     writeln!(writer)?;
 
     for (struct_name, typed_fields, untyped_fields) in list {

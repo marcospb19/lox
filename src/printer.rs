@@ -40,17 +40,17 @@ impl Display for UnaryExpression {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::token::TokenType;
+    use crate::token::Token;
 
     #[test]
     fn test_ast_pretty_printing() {
         let expression = BinaryExpression::new(
             box UnaryExpression::new(
-                TokenType::Minus,
-                box LiteralExpression::new(TokenType::Number(123.0)),
+                Token::Minus,
+                box LiteralExpression::new(Token::Number(123.0)),
             ),
-            TokenType::Star,
-            box GroupingExpression::new(box LiteralExpression::new(TokenType::Number(45.67))),
+            Token::Star,
+            box GroupingExpression::new(box LiteralExpression::new(Token::Number(45.67))),
         );
         let expression = expression.to_string();
 

@@ -1,8 +1,8 @@
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum TokenType {
-    // Single-character tokens.
+pub enum Token {
+    // Single-character tokens
     LeftParen,
     RightParen,
     LeftBrace,
@@ -15,7 +15,7 @@ pub enum TokenType {
     Slash,
     Star,
 
-    // One Or Two Character Tokens.
+    // One Or Two Character tokens
     Bang,
     BangEqual,
     Equal,
@@ -25,17 +25,15 @@ pub enum TokenType {
     Less,
     LessEqual,
 
-    // Literals.
+    // Literals
     Identifier(String),
     String(String),
     Number(f64),
-
-    // Nil and bool
     Nil,
     True,
     False,
 
-    // Keywords.
+    // Keywords
     And,
     Class,
     Else,
@@ -51,13 +49,13 @@ pub enum TokenType {
     While,
 }
 
-impl fmt::Display for TokenType {
+impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use TokenType::*;
+        use Token::*;
 
         let txt = match self {
-            Identifier(inner) | String(inner) => return write!(f, "{}", inner),
-            Number(inner) => return write!(f, "{}", inner),
+            Identifier(inner) | String(inner) => return inner.fmt(f),
+            Number(inner) => return inner.fmt(f),
             LeftParen => "(",
             RightParen => ")",
             LeftBrace => "{",
@@ -100,13 +98,13 @@ impl fmt::Display for TokenType {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Token {
-    token_type: TokenType,
-    position: Position,
+pub struct TokenWithPosition {
+    pub token_type: Token,
+    pub position: Position,
 }
 
-impl Token {
-    pub fn new(token_type: TokenType, position: Position) -> Self {
+impl TokenWithPosition {
+    pub fn new(token_type: Token, position: Position) -> Self {
         Self {
             token_type,
             position,
@@ -114,7 +112,7 @@ impl Token {
     }
 }
 
-impl fmt::Display for Token {
+impl fmt::Display for TokenWithPosition {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.token_type.fmt(f)
     }

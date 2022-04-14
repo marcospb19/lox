@@ -2,26 +2,26 @@ use std::str::Chars;
 
 use phf::phf_map;
 
-use crate::token::{Position, Token, TokenType};
+use crate::token::{Position, Token, TokenWithPosition};
 
 /// Compiler-time generated map of keywords.
-static KEYWORDS: phf::Map<&'static str, TokenType> = phf_map! {
-    "and"    => TokenType::And,
-    "class"  => TokenType::Class,
-    "else"   => TokenType::Else,
-    "false"  => TokenType::False,
-    "for"    => TokenType::For,
-    "fun"    => TokenType::Fun,
-    "if"     => TokenType::If,
-    "nil"    => TokenType::Nil,
-    "or"     => TokenType::Or,
-    "print"  => TokenType::Print,
-    "return" => TokenType::Return,
-    "super"  => TokenType::Super,
-    "this"   => TokenType::This,
-    "true"   => TokenType::True,
-    "var"    => TokenType::Var,
-    "while"  => TokenType::While,
+static KEYWORDS: phf::Map<&'static str, Token> = phf_map! {
+    "and"    => Token::And,
+    "class"  => Token::Class,
+    "else"   => Token::Else,
+    "false"  => Token::False,
+    "for"    => Token::For,
+    "fun"    => Token::Fun,
+    "if"     => Token::If,
+    "nil"    => Token::Nil,
+    "or"     => Token::Or,
+    "print"  => Token::Print,
+    "return" => Token::Return,
+    "super"  => Token::Super,
+    "this"   => Token::This,
+    "true"   => Token::True,
+    "var"    => Token::Var,
+    "while"  => Token::While,
 };
 
 /// Iterator that yields tokens from a piece of source code.
@@ -113,18 +113,18 @@ impl<'a> Scanner<'a> {
     }
 
     /// Consume an identifier and check if it is a keyword.
-    fn consume_identifier(&mut self) -> TokenType {
+    fn consume_identifier(&mut self) -> Token {
         self.advance_while(char::is_alphanumeric);
 
         let lexeme = self.token_lexeme();
 
         match KEYWORDS.get(lexeme) {
             Some(keyword_token) => keyword_token.clone(),
-            None => TokenType::Identifier(lexeme.to_owned()),
+            None => Token::Identifier(lexeme.to_owned()),
         }
     }
 
-    fn consume_string(&mut self) -> TokenType {
+    fn consume_string(&mut self) -> Token {
         self.advance_while(|ch| ch != '"');
 
         if self.is_at_end() {
@@ -137,10 +137,10 @@ impl<'a> Scanner<'a> {
 
         // Trim the surrounding quotes.
         let string = self.token_lexeme().trim_matches('"');
-        TokenType::String(string.into())
+        Token::String(string.into())
     }
 
-    fn consume_number(&mut self) -> TokenType {
+    fn consume_number(&mut self) -> Token {
         self.advance_while(|ch| ch.is_ascii_digit());
 
         // Look for a fractional part.
@@ -152,7 +152,7 @@ impl<'a> Scanner<'a> {
         }
 
         let number: f64 = self.token_lexeme().parse().expect("Decimal parse error.");
-        TokenType::Number(number)
+        Token::Number(number)
     }
 
     fn error(&mut self, message: impl ToString) {
@@ -165,10 +165,10 @@ impl<'a> Scanner<'a> {
 }
 
 impl Iterator for Scanner<'_> {
-    type Item = Token;
+    type Item = TokenWithPosition;
 
     fn next(&mut self) -> Option<Self::Item> {
-        use TokenType::*;
+        use Token::*;
 
         // Set the start of this token
         let mut token_position = self.reset_token();
@@ -211,13 +211,13 @@ impl Iterator for Scanner<'_> {
             }
         };
 
-        Some(Token::new(token_type, token_position))
+        Some(TokenWithPosition::new(token_type, token_position))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use TokenType::*;
+    use Token::*;
 
     use super::*;
 
@@ -228,24 +228,24 @@ mod tests {
 
         let mut scanner = Scanner::new(source_code);
 
-        assert_eq!(scanner.next().unwrap(), Token::new(Var                     , Position::new(1, 1)));
-        assert_eq!(scanner.next().unwrap(), Token::new(Identifier("foo".into()), Position::new(1, 5)));
-        assert_eq!(scanner.next().unwrap(), Token::new(Equal                   , Position::new(1, 9)));
-        assert_eq!(scanner.next().unwrap(), Token::new(Bang                    , Position::new(1, 11)));
-        assert_eq!(scanner.next().unwrap(), Token::new(String("text".into())   , Position::new(1, 12)));
-        assert_eq!(scanner.next().unwrap(), Token::new(Plus                    , Position::new(1, 19)));
-        assert_eq!(scanner.next().unwrap(), Token::new(LeftParen               , Position::new(1, 21)));
-        assert_eq!(scanner.next().unwrap(), Token::new(Identifier("min".into()), Position::new(1, 22)));
-        assert_eq!(scanner.next().unwrap(), Token::new(Plus                    , Position::new(1, 26)));
-        assert_eq!(scanner.next().unwrap(), Token::new(Identifier("max".into()), Position::new(1, 28)));
-        assert_eq!(scanner.next().unwrap(), Token::new(RightParen              , Position::new(1, 31)));
-        assert_eq!(scanner.next().unwrap(), Token::new(Slash                   , Position::new(1, 33)));
-        assert_eq!(scanner.next().unwrap(), Token::new(Number(2.0)             , Position::new(1, 35)));
-        assert_eq!(scanner.next().unwrap(), Token::new(Or                      , Position::new(1, 37)));
-        assert_eq!(scanner.next().unwrap(), Token::new(True                    , Position::new(1, 40)));
-        assert_eq!(scanner.next().unwrap(), Token::new(And                     , Position::new(1, 45)));
-        assert_eq!(scanner.next().unwrap(), Token::new(False                   , Position::new(1, 49)));
-        assert_eq!(scanner.next().unwrap(), Token::new(Semicolon               , Position::new(1, 54)));
+        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Var                     , Position::new(1, 1)));
+        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Identifier("foo".into()), Position::new(1, 5)));
+        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Equal                   , Position::new(1, 9)));
+        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Bang                    , Position::new(1, 11)));
+        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(String("text".into())   , Position::new(1, 12)));
+        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Plus                    , Position::new(1, 19)));
+        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(LeftParen               , Position::new(1, 21)));
+        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Identifier("min".into()), Position::new(1, 22)));
+        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Plus                    , Position::new(1, 26)));
+        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Identifier("max".into()), Position::new(1, 28)));
+        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(RightParen              , Position::new(1, 31)));
+        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Slash                   , Position::new(1, 33)));
+        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Number(2.0)             , Position::new(1, 35)));
+        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Or                      , Position::new(1, 37)));
+        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(True                    , Position::new(1, 40)));
+        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(And                     , Position::new(1, 45)));
+        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(False                   , Position::new(1, 49)));
+        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Semicolon               , Position::new(1, 54)));
         assert!(scanner.next().is_none());
     }
 
@@ -255,17 +255,17 @@ mod tests {
         let source_code = "1 - (2 * 3) < 4 == false";
         let mut scanner = Scanner::new(source_code);
 
-        assert_eq!(scanner.next().unwrap(), Token::new(Number(1.0), Position::new(1, 1)));
-        assert_eq!(scanner.next().unwrap(), Token::new(Minus      , Position::new(1, 3)));
-        assert_eq!(scanner.next().unwrap(), Token::new(LeftParen  , Position::new(1, 5)));
-        assert_eq!(scanner.next().unwrap(), Token::new(Number(2.0), Position::new(1, 6)));
-        assert_eq!(scanner.next().unwrap(), Token::new(Star       , Position::new(1, 8)));
-        assert_eq!(scanner.next().unwrap(), Token::new(Number(3.0), Position::new(1, 10)));
-        assert_eq!(scanner.next().unwrap(), Token::new(RightParen , Position::new(1, 11)));
-        assert_eq!(scanner.next().unwrap(), Token::new(Less       , Position::new(1, 13)));
-        assert_eq!(scanner.next().unwrap(), Token::new(Number(4.0), Position::new(1, 15)));
-        assert_eq!(scanner.next().unwrap(), Token::new(EqualEqual , Position::new(1, 17)));
-        assert_eq!(scanner.next().unwrap(), Token::new(False      , Position::new(1, 20)));
+        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Number(1.0), Position::new(1, 1)));
+        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Minus      , Position::new(1, 3)));
+        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(LeftParen  , Position::new(1, 5)));
+        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Number(2.0), Position::new(1, 6)));
+        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Star       , Position::new(1, 8)));
+        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Number(3.0), Position::new(1, 10)));
+        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(RightParen , Position::new(1, 11)));
+        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Less       , Position::new(1, 13)));
+        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Number(4.0), Position::new(1, 15)));
+        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(EqualEqual , Position::new(1, 17)));
+        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(False      , Position::new(1, 20)));
         assert!(scanner.next().is_none());
     }
 
