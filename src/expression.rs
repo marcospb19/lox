@@ -1,5 +1,3 @@
-#![cfg_attr(not(test), allow(unused))]
-
 use std::fmt;
 
 use crate::token::Token;

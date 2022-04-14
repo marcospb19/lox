@@ -1,29 +1,15 @@
-#![allow(unused)]
-
 use std::slice;
 
 use crate::{
-    expr::{
+    expression::{
         BinaryExpression, ExpressionBox, GroupingExpression, LiteralExpression, UnaryExpression,
     },
-    token::Token,
+    token::{Token, Token::*},
 };
 
 pub struct Parser<'a> {
     tokens: slice::Iter<'a, Token>,
 }
-
-/*
-expression     → equality ;
-equality       → comparison ( ( "!=" | "==" ) comparison )* ;
-comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
-term           → factor ( ( "-" | "+" ) factor )* ;
-factor         → unary ( ( "/" | "*" ) unary )* ;
-unary          → ( "!" | "-" ) unary
-                 | primary ;
-primary        → NUMBER | STRING | "true" | "false" | "nil"
-                 | "(" expression ")" ;
-*/
 
 impl<'a> Parser<'a> {
     pub fn new(tokens: &'a [Token]) -> Self {
@@ -40,82 +26,60 @@ impl<'a> Parser<'a> {
         self.equality()
     }
 
-    fn advance(&mut self) -> Option<&Token> {
-        self.tokens.next()
-    }
+    /// Advance one token if matched by given slice.
+    fn matches(&mut self, slice: &[Token]) -> Option<Token> {
+        let peek = || self.tokens.clone().next();
 
-    fn peek(&self) -> Option<&Token> {
-        self.tokens.clone().next()
-    }
-
-    fn matches(&mut self, f: impl Fn(&Token) -> bool) -> Option<Token> {
-        if let Some(peeked) = self.peek() {
-            if f(peeked) {
-                return self.advance().cloned();
+        if let Some(peeked) = peek() {
+            if slice.contains(peeked) {
+                // Advance
+                return self.tokens.next().cloned();
             }
         }
 
         None
     }
 
-    fn equality(&mut self) -> ExpressionBox {
-        use Token::*;
+    // Helper function to build binary expression parser steps in this form:
+    // step  →   next_step ( TOKENS next_step )* ;
+    //
+    // Form is satisfied for the following grammar rules:
+    // equality       → comparison ( ( "!=" | "=="             ) comparison )* ;
+    // comparison     → term       ( ( ">" | ">=" | "<" | "<=" ) term       )* ;
+    // term           → factor     ( ( "-" | "+"               ) factor     )* ;
+    // factor         → unary      ( ( "/" | "*"               ) unary      )* ;
+    fn binary_expression_parser_step<F>(&mut self, next_step: F, tokens: &[Token]) -> ExpressionBox
+    where
+        F: Fn(&mut Self) -> ExpressionBox,
+    {
+        let mut expr = next_step(self);
 
-        let mut expr = self.comparison();
-
-        while let Some(operator) = self.matches(|x| matches!(x, BangEqual | EqualEqual)) {
-            let right = self.comparison();
+        while let Some(operator) = self.matches(tokens) {
+            let right = next_step(self);
             expr = box BinaryExpression::new(expr, operator, right);
         }
 
         expr
+    }
+
+    fn equality(&mut self) -> ExpressionBox {
+        self.binary_expression_parser_step(Self::comparison, &[BangEqual, EqualEqual])
     }
 
     fn comparison(&mut self) -> ExpressionBox {
-        use Token::*;
-
-        let mut expr = self.term();
-
-        while let Some(operator) =
-            self.matches(|x| matches!(x, Greater | GreaterEqual | Less | LessEqual))
-        {
-            let right = self.term();
-            expr = box BinaryExpression::new(expr, operator, right);
-        }
-
-        expr
+        self.binary_expression_parser_step(Self::term, &[Greater, GreaterEqual, Less, LessEqual])
     }
 
     fn term(&mut self) -> ExpressionBox {
-        use Token::*;
-
-        let mut expr = self.factor();
-
-        while let Some(operator) = self.matches(|x| matches!(x, Minus | Plus)) {
-            let right = self.factor();
-            expr = box BinaryExpression::new(expr, operator, right);
-        }
-
-        expr
+        self.binary_expression_parser_step(Self::factor, &[Minus, Plus])
     }
 
     fn factor(&mut self) -> ExpressionBox {
-        use Token::*;
-
-        let mut expr = self.unary();
-
-        while let Some(operator) = self.matches(|x| matches!(x, Slash | Star)) {
-            let right = self.factor();
-            expr = box BinaryExpression::new(expr, operator, right);
-        }
-
-        expr
+        self.binary_expression_parser_step(Self::unary, &[Slash, Star])
     }
 
     fn unary(&mut self) -> ExpressionBox {
-        use Token::*;
-
-        if let Some(operator) = self.matches(|x| matches!(x, Bang | Minus)) {
+        if let Some(operator) = self.matches(&[Bang, Minus]) {
             let expression = self.unary();
             box UnaryExpression::new(operator, expression)
         } else {
@@ -124,28 +88,19 @@ impl<'a> Parser<'a> {
     }
 
     fn primary(&mut self) -> ExpressionBox {
-        use Token::*;
+        let token = self
+            .tokens
+            .next()
+            .unwrap_or_else(|| panic!("unexpected EOF"));
 
-        let x = self.advance().unwrap().clone();
-
-        if let False | True | Nil | Number(_) | String(_) = x {
-            box LiteralExpression::new(x)
-        } else if let LeftParen = x {
+        if token.is_literal() {
+            box LiteralExpression::new(token.clone())
+        } else if token == &Token::LeftParen {
             let expr = self.expression();
-
-            self.matches(|x| matches!(x, RightParen));
-            // if ! {
-            // private Token consume(TokenType type, String message) {
-            //   if (check(type)) return advance();
-            //   throw error(peek(), message);
-            // }
-            // consume(RIGHT_PAREN, "Expect ')' after expression.");
-            // panic!()
-            // }
-
+            self.matches(&[RightParen]);
             box GroupingExpression::new(expr)
         } else {
-            unreachable!()
+            unreachable!("token {token:?} was unexpected");
         }
     }
 }

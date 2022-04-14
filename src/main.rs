@@ -1,6 +1,6 @@
 #![feature(box_syntax)]
 
-mod expr;
+mod expression;
 mod parser;
 mod printer;
 mod scanner;
@@ -15,7 +15,7 @@ use std::{
 
 use fs_err as fs;
 
-use crate::scanner::Scanner;
+use crate::{parser::Parser, scanner::Scanner};
 
 fn main() -> io::Result<()> {
     let paths: Vec<OsString> = env::args_os().skip(1).collect();
@@ -38,7 +38,7 @@ fn run_prompt() -> io::Result<()> {
     for line in reader.lines() {
         let line = line?;
         print!("> ");
-        run_scanner(&line);
+        run(&line);
     }
 
     Ok(())
@@ -46,15 +46,15 @@ fn run_prompt() -> io::Result<()> {
 
 pub fn run_file(path: impl AsRef<Path>) -> io::Result<()> {
     let file_contents = fs::read_to_string(path.as_ref())?;
-    run_scanner(&file_contents);
+    run(&file_contents);
 
     Ok(())
 }
 
-pub fn run_scanner(text: &str) {
+pub fn run(text: &str) {
     let scanner = Scanner::new(text);
+    let tokens: Vec<_> = scanner.into_iter().map(|x| x.token_type).collect();
+    let ast = Parser::new(&tokens).parse();
 
-    for token in scanner {
-        println!("{:?}", token);
-    }
+    println!("{}", ast);
 }

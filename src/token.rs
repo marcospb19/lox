@@ -49,6 +49,17 @@ pub enum Token {
     While,
 }
 
+impl Token {
+    pub fn is_literal(&self) -> bool {
+        use Token::*;
+
+        matches!(
+            self,
+            False | True | Nil | Identifier(_) | Number(_) | String(_)
+        )
+    }
+}
+
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use Token::*;
