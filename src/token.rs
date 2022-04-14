@@ -29,9 +29,8 @@ pub enum Token {
     Identifier(String),
     String(String),
     Number(f64),
+    Bool(bool),
     Nil,
-    True,
-    False,
 
     // Keywords
     And,
@@ -53,10 +52,7 @@ impl Token {
     pub fn is_literal(&self) -> bool {
         use Token::*;
 
-        matches!(
-            self,
-            False | True | Nil | Identifier(_) | Number(_) | String(_)
-        )
+        matches!(self, Nil | Bool(_) | Identifier(_) | Number(_) | String(_))
     }
 }
 
@@ -67,6 +63,7 @@ impl fmt::Display for Token {
         let txt = match self {
             Identifier(inner) | String(inner) => return inner.fmt(f),
             Number(inner) => return inner.fmt(f),
+            Bool(inner) => return inner.fmt(f),
             LeftParen => "(",
             RightParen => ")",
             LeftBrace => "{",
@@ -87,8 +84,6 @@ impl fmt::Display for Token {
             Less => "<",
             LessEqual => "<=",
             Nil => "nil",
-            True => "true",
-            False => "false",
             And => "and",
             Class => "class",
             Else => "else",

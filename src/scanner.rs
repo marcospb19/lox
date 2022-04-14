@@ -9,7 +9,7 @@ static KEYWORDS: phf::Map<&'static str, Token> = phf_map! {
     "and"    => Token::And,
     "class"  => Token::Class,
     "else"   => Token::Else,
-    "false"  => Token::False,
+    "false"  => Token::Bool(false),
     "for"    => Token::For,
     "fun"    => Token::Fun,
     "if"     => Token::If,
@@ -19,7 +19,7 @@ static KEYWORDS: phf::Map<&'static str, Token> = phf_map! {
     "return" => Token::Return,
     "super"  => Token::Super,
     "this"   => Token::This,
-    "true"   => Token::True,
+    "true"   => Token::Bool(true),
     "var"    => Token::Var,
     "while"  => Token::While,
 };
@@ -242,9 +242,9 @@ mod tests {
         assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Slash                   , Position::new(1, 33)));
         assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Number(2.0)             , Position::new(1, 35)));
         assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Or                      , Position::new(1, 37)));
-        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(True                    , Position::new(1, 40)));
+        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Bool(true)              , Position::new(1, 40)));
         assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(And                     , Position::new(1, 45)));
-        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(False                   , Position::new(1, 49)));
+        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Bool(false)             , Position::new(1, 49)));
         assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Semicolon               , Position::new(1, 54)));
         assert!(scanner.next().is_none());
     }
@@ -265,7 +265,7 @@ mod tests {
         assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Less       , Position::new(1, 13)));
         assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Number(4.0), Position::new(1, 15)));
         assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(EqualEqual , Position::new(1, 17)));
-        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(False      , Position::new(1, 20)));
+        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Bool(false), Position::new(1, 20)));
         assert!(scanner.next().is_none());
     }
 
