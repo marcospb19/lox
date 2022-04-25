@@ -1,15 +1,6 @@
-use std::fmt;
+use pm::make_expressions;
 
-use crate::token::Token;
-
-pub trait Expression: fmt::Display {}
-
-impl Expression for BinaryExpression {}
-impl Expression for GroupingExpression {}
-impl Expression for LiteralExpression {}
-impl Expression for UnaryExpression {}
-
-pub type ExpressionBox = Box<dyn Expression>;
+make_expressions!();
 
 pub struct BinaryExpression {
     pub left: ExpressionBox,

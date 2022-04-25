@@ -31,22 +31,6 @@ fn define_ast(name: &str, list: &[(&str, &str, &str)]) -> io::Result<()> {
     let path = format!("src/{name}.rs");
     let mut writer = fs::File::create(&path)?;
 
-    writeln!(writer, "#![cfg_attr(not(test), allow(unused))]")?;
-    writeln!(writer)?;
-    writeln!(writer, "use std::fmt;")?;
-    writeln!(writer)?;
-    writeln!(writer, "use crate::token::Token;")?;
-    writeln!(writer)?;
-    writeln!(writer, "pub trait Expression: fmt::Display {{}}")?;
-    writeln!(writer)?;
-    writeln!(writer, "impl Expression for BinaryExpression {{}}")?;
-    writeln!(writer, "impl Expression for GroupingExpression {{}}")?;
-    writeln!(writer, "impl Expression for LiteralExpression {{}}")?;
-    writeln!(writer, "impl Expression for UnaryExpression {{}}")?;
-    writeln!(writer)?;
-    writeln!(writer, "type ExpressionBox = Box<dyn Expression>;")?;
-    writeln!(writer)?;
-
     for (struct_name, typed_fields, untyped_fields) in list {
         define_struct(&mut writer, struct_name, typed_fields, untyped_fields)?;
     }
