@@ -6,10 +6,11 @@ use crate::token::{Position, Token, TokenWithPosition};
 
 /// Compiler-time generated map of keywords.
 static KEYWORDS: phf::Map<&'static str, Token> = phf_map! {
+    "false"  => Token::Bool(false),
+    "true"   => Token::Bool(true),
     "and"    => Token::And,
     "class"  => Token::Class,
     "else"   => Token::Else,
-    "false"  => Token::Bool(false),
     "for"    => Token::For,
     "fun"    => Token::Fun,
     "if"     => Token::If,
@@ -19,7 +20,6 @@ static KEYWORDS: phf::Map<&'static str, Token> = phf_map! {
     "return" => Token::Return,
     "super"  => Token::Super,
     "this"   => Token::This,
-    "true"   => Token::Bool(true),
     "var"    => Token::Var,
     "while"  => Token::While,
 };

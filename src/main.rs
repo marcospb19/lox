@@ -1,9 +1,9 @@
 #![feature(box_syntax)]
 
 mod expression;
+mod lexer;
 mod parser;
 mod printer;
-mod scanner;
 mod token;
 
 use std::{
@@ -15,7 +15,7 @@ use std::{
 
 use fs_err as fs;
 
-use crate::{parser::Parser, scanner::Scanner};
+use crate::{lexer::Scanner, parser::Parser};
 
 fn main() -> io::Result<()> {
     let paths: Vec<OsString> = env::args_os().skip(1).collect();
