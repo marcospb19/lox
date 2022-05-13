@@ -54,7 +54,7 @@ pub fn run_file(path: impl AsRef<Path>) -> io::Result<()> {
 pub fn run(text: &str) {
     let scanner = Scanner::new(text);
     let tokens: Vec<_> = scanner.into_iter().map(|x| x.token_type).collect();
-    let ast = Parser::new(&tokens).parse();
+    let ast = Parser::new(&tokens).parse().unwrap();
 
     println!("{}", ast);
 }

@@ -7,37 +7,78 @@ use crate::{
     token::{Token, Token::*},
 };
 
+#[derive(Debug)]
 pub struct Parser<'a> {
-    tokens: slice::Iter<'a, Token>,
+    tokens_iter: slice::Iter<'a, Token>,
+    errors: Vec<ParseError>,
+}
+
+#[derive(Debug)]
+pub enum ParseError {
+    UnclosedGrouping,
 }
 
 impl<'a> Parser<'a> {
     pub fn new(tokens: &'a [Token]) -> Self {
         Self {
-            tokens: tokens.iter(),
+            tokens_iter: tokens.iter(),
+            errors: vec![],
         }
     }
 
-    pub fn parse(mut self) -> ExpressionBox {
-        self.expression()
+    pub fn parse(mut self) -> Result<ExpressionBox, Vec<ParseError>> {
+        self.expression().ok_or(self.errors)
     }
 
-    fn expression(&mut self) -> ExpressionBox {
-        self.equality()
+    fn advance(&mut self) -> Option<&Token> {
+        self.tokens_iter.next()
+    }
+
+    fn peek(&self) -> Option<&Token> {
+        self.tokens_iter.clone().next()
     }
 
     /// Advance one token if matched by given slice.
     fn matches(&mut self, slice: &[Token]) -> Option<Token> {
-        let peek = || self.tokens.clone().next();
-
-        if let Some(peeked) = peek() {
+        if let Some(peeked) = self.peek() {
             if slice.contains(peeked) {
-                // Advance
-                return self.tokens.next().cloned();
+                return self.advance().cloned();
             }
         }
 
         None
+    }
+
+    #[allow(unused)]
+    fn synchronize(&mut self) {
+        loop {
+            let skipped = self.advance();
+
+            // If has reached the end of the tokens_iter, or an semicolon
+            if let None | Some(Token::Semicolon) = skipped {
+                return;
+            }
+
+            if let Some(
+                Token::Class
+                | Token::Fun
+                | Token::Var
+                | Token::For
+                | Token::If
+                | Token::While
+                | Token::Print
+                | Token::Return,
+            ) = self.peek()
+            {
+                return;
+            }
+
+            self.advance();
+        }
+    }
+
+    fn expression(&mut self) -> Option<ExpressionBox> {
+        self.equality()
     }
 
     // Helper function to build binary expression parser steps in this form:
@@ -48,57 +89,70 @@ impl<'a> Parser<'a> {
     // comparison     → term       ( ( ">" | ">=" | "<" | "<=" ) term       )* ;
     // term           → factor     ( ( "-" | "+"               ) factor     )* ;
     // factor         → unary      ( ( "/" | "*"               ) unary      )* ;
-    fn binary_expression_parser_step<F>(&mut self, next_step: F, tokens: &[Token]) -> ExpressionBox
+    fn binary_expression_parser_step<F>(
+        &mut self,
+        next_step: F,
+        tokens: &[Token],
+    ) -> Option<ExpressionBox>
     where
-        F: Fn(&mut Self) -> ExpressionBox,
+        F: Fn(&mut Self) -> Option<ExpressionBox>,
     {
-        let mut expr = next_step(self);
+        let mut expr = next_step(self)?;
 
         while let Some(operator) = self.matches(tokens) {
-            let right = next_step(self);
+            let right = next_step(self)?;
             expr = box BinaryExpression::new(expr, operator, right);
         }
 
-        expr
+        Some(expr)
     }
 
-    fn equality(&mut self) -> ExpressionBox {
+    fn equality(&mut self) -> Option<ExpressionBox> {
         self.binary_expression_parser_step(Self::comparison, &[BangEqual, EqualEqual])
     }
 
-    fn comparison(&mut self) -> ExpressionBox {
+    fn comparison(&mut self) -> Option<ExpressionBox> {
         self.binary_expression_parser_step(Self::term, &[Greater, GreaterEqual, Less, LessEqual])
     }
 
-    fn term(&mut self) -> ExpressionBox {
+    fn term(&mut self) -> Option<ExpressionBox> {
         self.binary_expression_parser_step(Self::factor, &[Minus, Plus])
     }
 
-    fn factor(&mut self) -> ExpressionBox {
+    fn factor(&mut self) -> Option<ExpressionBox> {
         self.binary_expression_parser_step(Self::unary, &[Slash, Star])
     }
 
-    fn unary(&mut self) -> ExpressionBox {
+    fn unary(&mut self) -> Option<ExpressionBox> {
         if let Some(operator) = self.matches(&[Bang, Minus]) {
-            let expression = self.unary();
-            box UnaryExpression::new(operator, expression)
+            let expression = self.unary()?;
+            Some(box UnaryExpression::new(operator, expression))
         } else {
             self.primary()
         }
     }
 
-    fn primary(&mut self) -> ExpressionBox {
+    fn primary(&mut self) -> Option<ExpressionBox> {
         let token = self
-            .tokens
+            .tokens_iter
             .next()
             .unwrap_or_else(|| panic!("unexpected EOF"));
 
         if token.is_literal() {
-            box LiteralExpression::new(token.clone())
+            Some(box LiteralExpression::new(token.clone()))
         } else if token == &Token::LeftParen {
-            let expr = self.expression();
-            self.matches(&[RightParen]);
-            box GroupingExpression::new(expr)
+            // Eat next expression
+            let expr = self.expression()?;
+
+            // We expect the next token to be a closing parenthesis
+            // If it's not, enter recovery mode that jumps to the next statement.
+            match self.matches(&[RightParen]) {
+                Some(_) => Some(box GroupingExpression::new(expr)),
+                None => {
+                    self.errors.push(ParseError::UnclosedGrouping);
+                    None
+                }
+            }
         } else {
             unreachable!("token {token:?} was unexpected");
         }
@@ -116,7 +170,7 @@ mod tests {
         let scanner = Scanner::new(source_code);
         let tokens: Vec<_> = scanner.into_iter().map(|x| x.token_type).collect();
 
-        let ast = Parser::new(&tokens).parse();
+        let ast = Parser::new(&tokens).parse().unwrap();
         assert_eq!("(== (< (- 1 (group (* 2 3))) 4) false)", ast.to_string());
     }
 }
