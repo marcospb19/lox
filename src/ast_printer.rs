@@ -2,6 +2,18 @@ use std::fmt::{Display, Formatter, Result};
 
 use crate::expression::*;
 
+impl Display for Expression {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        let self_variant: &dyn Display = match self {
+            Self::Grouping(inner) => return write!(f, "(group {})", inner),
+            Self::Literal(inner) => inner,
+            Self::Binary(inner) => inner,
+            Self::Unary(inner) => inner,
+        };
+        self_variant.fmt(f)
+    }
+}
+
 impl Display for BinaryExpression {
     fn fmt(&self, f: &mut Formatter) -> Result {
         let Self {
@@ -10,13 +22,6 @@ impl Display for BinaryExpression {
             right,
         } = self;
         write!(f, "({operator} {left} {right})")
-    }
-}
-
-impl Display for GroupingExpression {
-    fn fmt(&self, f: &mut Formatter) -> Result {
-        let Self { expression } = self;
-        write!(f, "(group {expression})")
     }
 }
 
@@ -45,12 +50,14 @@ mod tests {
     #[test]
     fn test_ast_pretty_printing() {
         let expression = BinaryExpression::new(
-            box UnaryExpression::new(
+            Expression::Unary(box UnaryExpression::new(
                 Token::Minus,
-                box LiteralExpression::new(Token::Number(123.0)),
-            ),
+                Expression::Literal(LiteralExpression::new(Token::Number(123.0))),
+            )),
             Token::Star,
-            box GroupingExpression::new(box LiteralExpression::new(Token::Number(45.67))),
+            Expression::Grouping(box Expression::Literal(LiteralExpression::new(
+                Token::Number(45.67),
+            ))),
         );
         let expression = expression.to_string();
 

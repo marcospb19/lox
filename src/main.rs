@@ -1,9 +1,9 @@
 #![feature(box_syntax)]
 
+mod ast_printer;
 mod expression;
 mod lexer;
 mod parser;
-mod printer;
 mod token;
 
 use std::{

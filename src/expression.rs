@@ -1,39 +1,25 @@
-use std::fmt;
-
 use crate::token::Token;
 
-pub trait Expression: fmt::Display {}
-
-impl Expression for BinaryExpression {}
-impl Expression for GroupingExpression {}
-impl Expression for LiteralExpression {}
-impl Expression for UnaryExpression {}
-
-pub type ExpressionBox = Box<dyn Expression>;
+pub enum Expression {
+    Literal(LiteralExpression),
+    Binary(Box<BinaryExpression>),
+    Grouping(Box<Expression>),
+    Unary(Box<UnaryExpression>),
+}
 
 pub struct BinaryExpression {
-    pub left: ExpressionBox,
+    pub left: Expression,
     pub operator: Token,
-    pub right: ExpressionBox,
+    pub right: Expression,
 }
 
 impl BinaryExpression {
-    pub fn new(left: ExpressionBox, operator: Token, right: ExpressionBox) -> Self {
+    pub fn new(left: Expression, operator: Token, right: Expression) -> Self {
         Self {
             left,
             operator,
             right,
         }
-    }
-}
-
-pub struct GroupingExpression {
-    pub expression: ExpressionBox,
-}
-
-impl GroupingExpression {
-    pub fn new(expression: ExpressionBox) -> Self {
-        Self { expression }
     }
 }
 
@@ -49,11 +35,11 @@ impl LiteralExpression {
 
 pub struct UnaryExpression {
     pub operator: Token,
-    pub expression: ExpressionBox,
+    pub expression: Expression,
 }
 
 impl UnaryExpression {
-    pub fn new(operator: Token, expression: ExpressionBox) -> Self {
+    pub fn new(operator: Token, expression: Expression) -> Self {
         Self {
             operator,
             expression,

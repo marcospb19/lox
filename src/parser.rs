@@ -1,9 +1,7 @@
 use std::slice;
 
 use crate::{
-    expression::{
-        BinaryExpression, ExpressionBox, GroupingExpression, LiteralExpression, UnaryExpression,
-    },
+    expression::{BinaryExpression, Expression, LiteralExpression, UnaryExpression},
     token::{Token, Token::*},
 };
 
@@ -26,7 +24,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse(mut self) -> Result<ExpressionBox, Vec<ParseError>> {
+    pub fn parse(mut self) -> Result<Expression, Vec<ParseError>> {
         self.expression().ok_or(self.errors)
     }
 
@@ -77,7 +75,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn expression(&mut self) -> Option<ExpressionBox> {
+    fn expression(&mut self) -> Option<Expression> {
         self.equality()
     }
 
@@ -93,53 +91,55 @@ impl<'a> Parser<'a> {
         &mut self,
         next_step: F,
         tokens: &[Token],
-    ) -> Option<ExpressionBox>
+    ) -> Option<Expression>
     where
-        F: Fn(&mut Self) -> Option<ExpressionBox>,
+        F: Fn(&mut Self) -> Option<Expression>,
     {
         let mut expr = next_step(self)?;
 
         while let Some(operator) = self.matches(tokens) {
             let right = next_step(self)?;
-            expr = box BinaryExpression::new(expr, operator, right);
+            expr = Expression::Binary(box BinaryExpression::new(expr, operator, right));
         }
 
         Some(expr)
     }
 
-    fn equality(&mut self) -> Option<ExpressionBox> {
+    fn equality(&mut self) -> Option<Expression> {
         self.binary_expression_parser_step(Self::comparison, &[BangEqual, EqualEqual])
     }
 
-    fn comparison(&mut self) -> Option<ExpressionBox> {
+    fn comparison(&mut self) -> Option<Expression> {
         self.binary_expression_parser_step(Self::term, &[Greater, GreaterEqual, Less, LessEqual])
     }
 
-    fn term(&mut self) -> Option<ExpressionBox> {
+    fn term(&mut self) -> Option<Expression> {
         self.binary_expression_parser_step(Self::factor, &[Minus, Plus])
     }
 
-    fn factor(&mut self) -> Option<ExpressionBox> {
+    fn factor(&mut self) -> Option<Expression> {
         self.binary_expression_parser_step(Self::unary, &[Slash, Star])
     }
 
-    fn unary(&mut self) -> Option<ExpressionBox> {
+    fn unary(&mut self) -> Option<Expression> {
         if let Some(operator) = self.matches(&[Bang, Minus]) {
             let expression = self.unary()?;
-            Some(box UnaryExpression::new(operator, expression))
+            Some(Expression::Unary(box UnaryExpression::new(
+                operator, expression,
+            )))
         } else {
             self.primary()
         }
     }
 
-    fn primary(&mut self) -> Option<ExpressionBox> {
+    fn primary(&mut self) -> Option<Expression> {
         let token = self
             .tokens_iter
             .next()
             .unwrap_or_else(|| panic!("unexpected EOF"));
 
         if token.is_literal() {
-            Some(box LiteralExpression::new(token.clone()))
+            Some(Expression::Literal(LiteralExpression::new(token.clone())))
         } else if token == &Token::LeftParen {
             // Eat next expression
             let expr = self.expression()?;
@@ -147,7 +147,7 @@ impl<'a> Parser<'a> {
             // We expect the next token to be a closing parenthesis
             // If it's not, enter recovery mode that jumps to the next statement.
             match self.matches(&[RightParen]) {
-                Some(_) => Some(box GroupingExpression::new(expr)),
+                Some(_) => Some(Expression::Grouping(box expr)),
                 None => {
                     self.errors.push(ParseError::UnclosedGrouping);
                     None
