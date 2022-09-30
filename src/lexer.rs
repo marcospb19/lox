@@ -1,4 +1,4 @@
-use std::str::Chars;
+use std::{ops::Not, str::Chars};
 
 use phf::phf_map;
 
@@ -81,7 +81,7 @@ impl<'a> Scanner<'a> {
     }
 
     fn advance_while(&mut self, f: impl Fn(char) -> bool) {
-        while !self.is_at_end() && f(self.peek()) {
+        while self.is_at_end().not() && f(self.peek()) {
             self.advance();
         }
     }

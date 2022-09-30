@@ -1,5 +1,6 @@
 use crate::token::Token;
 
+#[derive(Debug)]
 pub enum Expression {
     Literal(LiteralExpression),
     Binary(Box<BinaryExpression>),
@@ -7,6 +8,7 @@ pub enum Expression {
     Unary(Box<UnaryExpression>),
 }
 
+#[derive(Debug)]
 pub struct BinaryExpression {
     pub left: Expression,
     pub operator: Token,
@@ -23,6 +25,7 @@ impl BinaryExpression {
     }
 }
 
+#[derive(Debug)]
 pub struct LiteralExpression {
     pub value: Token,
 }
@@ -33,6 +36,7 @@ impl LiteralExpression {
     }
 }
 
+#[derive(Debug)]
 pub struct UnaryExpression {
     pub operator: Token,
     pub expression: Expression,

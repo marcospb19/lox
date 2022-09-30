@@ -1,6 +1,18 @@
 use std::fmt::{Display, Formatter, Result};
 
-use crate::expression::*;
+use crate::{
+    expression::{BinaryExpression, Expression, LiteralExpression, UnaryExpression},
+    statement::Statement,
+};
+
+impl Display for Statement {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        match self {
+            Self::Expression(inner) => write!(f, "(expression {inner})"),
+            Self::Print(inner) => write!(f, "(print {inner})"),
+        }
+    }
+}
 
 impl Display for Expression {
     fn fmt(&self, f: &mut Formatter) -> Result {

@@ -50,9 +50,28 @@ pub enum Token {
 
 impl Token {
     pub fn is_literal(&self) -> bool {
-        use Token::*;
+        matches!(
+            self,
+            Token::Nil
+                | Token::Bool(_)
+                | Token::Identifier(_)
+                | Token::Number(_)
+                | Token::String(_)
+        )
+    }
 
-        matches!(self, Nil | Bool(_) | Identifier(_) | Number(_) | String(_))
+    pub fn is_start_of_statement(&self) -> bool {
+        matches!(
+            self,
+            Token::Class
+                | Token::Fun
+                | Token::Var
+                | Token::For
+                | Token::If
+                | Token::While
+                | Token::Print
+                | Token::Return
+        )
     }
 }
 
@@ -124,7 +143,7 @@ impl fmt::Display for TokenWithPosition {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Position {
     pub line: usize,
     pub column: usize,

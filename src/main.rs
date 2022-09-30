@@ -1,60 +1,87 @@
 #![feature(box_syntax)]
 
 mod ast_printer;
+mod error;
 mod expression;
+mod interpreter;
 mod lexer;
 mod parser;
+mod statement;
 mod token;
+mod utils;
 
 use std::{
     env,
     ffi::OsString,
-    io::{self, BufRead, BufReader},
+    io::{self, Write},
     path::Path,
+    process,
 };
 
 use fs_err as fs;
 
-use crate::{lexer::Scanner, parser::Parser};
+use crate::{
+    error::{ParserErrorReporter, Result},
+    expression::Expression,
+    interpreter::interpret_program,
+    lexer::Scanner,
+    parser::Parser,
+};
 
-fn main() -> io::Result<()> {
+fn main() {
+    run().unwrap_or_else(|err| {
+        eprint!("{err}");
+        process::exit(1);
+    });
+}
+
+fn run() -> Result<()> {
     let paths: Vec<OsString> = env::args_os().skip(1).collect();
 
     if paths.is_empty() {
-        run_prompt()?;
+        start_repl()?;
     } else {
         for arg in &paths {
-            run_file(arg)?;
+            interpret_lox_file(arg.as_ref())?;
         }
     }
 
     Ok(())
 }
 
-fn run_prompt() -> io::Result<()> {
-    let reader = io::stdin();
-    let reader = BufReader::new(reader);
-
-    for line in reader.lines() {
-        let line = line?;
+fn start_repl() -> Result<()> {
+    loop {
         print!("> ");
-        run(&line);
+        io::stdout().flush()?;
+
+        let mut line = String::new();
+        let bytes = io::stdin().read_line(&mut line)?;
+
+        if bytes == 0 {
+            return Ok(());
+        }
+
+        // If errors appear, report them and keep the REPL running.
+        match interpret_lox(&line) {
+            Ok(_) => {}
+            Err(err) => eprint!("{err}"),
+        }
     }
+}
+
+fn interpret_lox_file(path: &Path) -> Result<()> {
+    let file_contents = fs::read_to_string(path)?;
+    interpret_lox(&file_contents)?;
 
     Ok(())
 }
 
-pub fn run_file(path: impl AsRef<Path>) -> io::Result<()> {
-    let file_contents = fs::read_to_string(path.as_ref())?;
-    run(&file_contents);
-
-    Ok(())
-}
-
-pub fn run(text: &str) {
+fn interpret_lox(text: &str) -> Result<()> {
     let scanner = Scanner::new(text);
     let tokens: Vec<_> = scanner.into_iter().map(|x| x.token_type).collect();
-    let ast = Parser::new(&tokens).parse().unwrap();
 
-    println!("{}", ast);
+    let statements = Parser::new(&tokens).try_parse()?;
+
+    interpret_program(statements)?;
+    Ok(())
 }
