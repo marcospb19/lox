@@ -64,7 +64,7 @@ fn start_repl() -> Result<()> {
         // If errors appear, report them and keep the REPL running.
         match interpret_lox(&line) {
             Ok(_) => {}
-            Err(err) => eprint!("{err}"),
+            Err(err) => eprintln!("{err}"),
         }
     }
 }
@@ -77,11 +77,8 @@ fn interpret_lox_file(path: &Path) -> Result<()> {
 }
 
 fn interpret_lox(text: &str) -> Result<()> {
-    let scanner = Scanner::new(text);
-    let tokens: Vec<_> = scanner.into_iter().map(|x| x.token_type).collect();
-
+    let tokens = Scanner::new(text).try_scan_all()?;
     let statements = Parser::new(&tokens).try_parse()?;
 
-    interpret_program(statements)?;
-    Ok(())
+    interpret_program(statements).map_err(From::from)
 }

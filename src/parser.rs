@@ -23,8 +23,6 @@
 
 use std::slice;
 
-use thiserror::Error;
-
 use crate::{
     expression::{BinaryExpression, Expression, LiteralExpression, UnaryExpression},
     statement::Statement,
@@ -228,7 +226,7 @@ impl<'a> Parser<'a> {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum ParserError {
     #[error("Unclosed delimiter, expected ')'")]
     UnclosedGrouping,
@@ -247,7 +245,7 @@ mod tests {
     fn test_parsing_expression() {
         let source_code = "1 - (2 * 3) < 4 == false";
         let scanner = Scanner::new(source_code);
-        let tokens: Vec<_> = scanner.into_iter().map(|x| x.token_type).collect();
+        let tokens = scanner.try_scan_all().unwrap();
 
         let ast = Parser::new(&tokens).parse_expression().unwrap();
         assert_eq!("(== (< (- 1 (group (* 2 3))) 4) false)", ast.to_string());

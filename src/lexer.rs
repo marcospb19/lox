@@ -46,6 +46,12 @@ impl<'a> Scanner<'a> {
         }
     }
 
+    pub fn try_scan_all(self) -> Result<Vec<Token>, LexerError> {
+        self.into_iter()
+            .map(|x| Ok(x?.token_type))
+            .collect::<Result<Vec<_>, _>>()
+    }
+
     fn is_at_end(&self) -> bool {
         self.chars.as_str().is_empty()
     }
@@ -124,23 +130,23 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    fn consume_string(&mut self) -> Token {
+    fn consume_string(&mut self) -> Result<Token, LexerError> {
         self.advance_while(|ch| ch != '"');
 
         if self.is_at_end() {
-            self.error("Unterminated string.");
-            panic!();
+            return Err(LexerError::UnterminatedString);
         }
 
-        // The closing "
+        // Skip the closing "
         self.advance();
 
         // Trim the surrounding quotes.
         let string = self.token_lexeme().trim_matches('"');
-        Token::String(string.into())
+
+        Ok(Token::String(string.into()))
     }
 
-    fn consume_number(&mut self) -> Token {
+    fn consume_number(&mut self) -> Result<Token, LexerError> {
         self.advance_while(|ch| ch.is_ascii_digit());
 
         // Look for a fractional part.
@@ -151,8 +157,11 @@ impl<'a> Scanner<'a> {
             self.advance_while(|ch| ch.is_ascii_digit());
         }
 
-        let number: f64 = self.token_lexeme().parse().expect("Decimal parse error.");
-        Token::Number(number)
+        // Parse number
+        match self.token_lexeme().parse() {
+            Ok(number) => Ok(Token::Number(number)),
+            Err(_err) => Err(LexerError::InvalidNumber),
+        }
     }
 
     fn error(&mut self, message: impl ToString) {
@@ -165,7 +174,7 @@ impl<'a> Scanner<'a> {
 }
 
 impl Iterator for Scanner<'_> {
-    type Item = TokenWithPosition;
+    type Item = Result<TokenWithPosition, LexerError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         use Token::*;
@@ -203,16 +212,34 @@ impl Iterator for Scanner<'_> {
                 '<' => break Less,
                 '>' => break Greater,
                 '/' => break Slash,
-                '"' => break self.consume_string(),
-                '0'..='9' => break self.consume_number(),
+                '"' => {
+                    match self.consume_string() {
+                        Ok(string) => break string,
+                        Err(err) => return Some(Err(err)),
+                    }
+                }
+                '0'..='9' => {
+                    match self.consume_number() {
+                        Ok(number) => break number,
+                        Err(err) => return Some(Err(err)),
+                    }
+                }
                 c if c.is_alphabetic() => break self.consume_identifier(),
                 c if c.is_whitespace() => token_position = self.reset_token(),
                 _ => self.error("Unexpected character."),
             }
         };
 
-        Some(TokenWithPosition::new(token_type, token_position))
+        Some(Ok(TokenWithPosition::new(token_type, token_position)))
     }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum LexerError {
+    #[error("Unterminated string.")]
+    UnterminatedString,
+    #[error("Invalid number.")]
+    InvalidNumber,
 }
 
 #[cfg(test)]
@@ -227,61 +254,71 @@ mod tests {
         let source_code = r#"var foo = !"text" + (min + max) / 2 or true and false;"#;
 
         let mut scanner = Scanner::new(source_code);
+        let mut n = || scanner.next().unwrap().unwrap();
 
-        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Var                     , Position::new(1, 1)));
-        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Identifier("foo".into()), Position::new(1, 5)));
-        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Equal                   , Position::new(1, 9)));
-        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Bang                    , Position::new(1, 11)));
-        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(String("text".into())   , Position::new(1, 12)));
-        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Plus                    , Position::new(1, 19)));
-        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(LeftParen               , Position::new(1, 21)));
-        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Identifier("min".into()), Position::new(1, 22)));
-        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Plus                    , Position::new(1, 26)));
-        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Identifier("max".into()), Position::new(1, 28)));
-        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(RightParen              , Position::new(1, 31)));
-        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Slash                   , Position::new(1, 33)));
-        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Number(2.0)             , Position::new(1, 35)));
-        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Or                      , Position::new(1, 37)));
-        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Bool(true)              , Position::new(1, 40)));
-        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(And                     , Position::new(1, 45)));
-        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Bool(false)             , Position::new(1, 49)));
-        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Semicolon               , Position::new(1, 54)));
+        assert_eq!(n(), TokenWithPosition::new(Var                     , Position::new(1, 1)));
+        assert_eq!(n(), TokenWithPosition::new(Identifier("foo".into()), Position::new(1, 5)));
+        assert_eq!(n(), TokenWithPosition::new(Equal                   , Position::new(1, 9)));
+        assert_eq!(n(), TokenWithPosition::new(Bang                    , Position::new(1, 11)));
+        assert_eq!(n(), TokenWithPosition::new(String("text".into())   , Position::new(1, 12)));
+        assert_eq!(n(), TokenWithPosition::new(Plus                    , Position::new(1, 19)));
+        assert_eq!(n(), TokenWithPosition::new(LeftParen               , Position::new(1, 21)));
+        assert_eq!(n(), TokenWithPosition::new(Identifier("min".into()), Position::new(1, 22)));
+        assert_eq!(n(), TokenWithPosition::new(Plus                    , Position::new(1, 26)));
+        assert_eq!(n(), TokenWithPosition::new(Identifier("max".into()), Position::new(1, 28)));
+        assert_eq!(n(), TokenWithPosition::new(RightParen              , Position::new(1, 31)));
+        assert_eq!(n(), TokenWithPosition::new(Slash                   , Position::new(1, 33)));
+        assert_eq!(n(), TokenWithPosition::new(Number(2.0)             , Position::new(1, 35)));
+        assert_eq!(n(), TokenWithPosition::new(Or                      , Position::new(1, 37)));
+        assert_eq!(n(), TokenWithPosition::new(Bool(true)              , Position::new(1, 40)));
+        assert_eq!(n(), TokenWithPosition::new(And                     , Position::new(1, 45)));
+        assert_eq!(n(), TokenWithPosition::new(Bool(false)             , Position::new(1, 49)));
+        assert_eq!(n(), TokenWithPosition::new(Semicolon               , Position::new(1, 54)));
         assert!(scanner.next().is_none());
     }
 
     #[rustfmt::skip]
-    #[test]
-    fn test_scanning_expression() {
-        let source_code = "1 - (2 * 3) < 4 == false";
-        let mut scanner = Scanner::new(source_code);
+        #[test]
+        fn test_scanning_expression() {
+            let source_code = "1 - (2 * 3) < 4 == false";
+            let mut scanner = Scanner::new(source_code);
+            let mut n = || scanner.next().unwrap().unwrap();
 
-        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Number(1.0), Position::new(1, 1)));
-        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Minus      , Position::new(1, 3)));
-        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(LeftParen  , Position::new(1, 5)));
-        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Number(2.0), Position::new(1, 6)));
-        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Star       , Position::new(1, 8)));
-        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Number(3.0), Position::new(1, 10)));
-        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(RightParen , Position::new(1, 11)));
-        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Less       , Position::new(1, 13)));
-        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Number(4.0), Position::new(1, 15)));
-        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(EqualEqual , Position::new(1, 17)));
-        assert_eq!(scanner.next().unwrap(), TokenWithPosition::new(Bool(false), Position::new(1, 20)));
-        assert!(scanner.next().is_none());
-    }
+            assert_eq!(n(), TokenWithPosition::new(Number(1.0), Position::new(1, 1)));
+            assert_eq!(n(), TokenWithPosition::new(Minus      , Position::new(1, 3)));
+            assert_eq!(n(), TokenWithPosition::new(LeftParen  , Position::new(1, 5)));
+            assert_eq!(n(), TokenWithPosition::new(Number(2.0), Position::new(1, 6)));
+            assert_eq!(n(), TokenWithPosition::new(Star       , Position::new(1, 8)));
+            assert_eq!(n(), TokenWithPosition::new(Number(3.0), Position::new(1, 10)));
+            assert_eq!(n(), TokenWithPosition::new(RightParen , Position::new(1, 11)));
+            assert_eq!(n(), TokenWithPosition::new(Less       , Position::new(1, 13)));
+            assert_eq!(n(), TokenWithPosition::new(Number(4.0), Position::new(1, 15)));
+            assert_eq!(n(), TokenWithPosition::new(EqualEqual , Position::new(1, 17)));
+            assert_eq!(n(), TokenWithPosition::new(Bool(false), Position::new(1, 20)));
+            assert!(scanner.next().is_none());
+        }
 
     #[test]
     fn test_multiple_comments() {
         let source_code = "\
-            // fn main() {\n\
-            // println!(\"hello world\");\n\
-            // }\n\
-        ";
+                // fn main() {\n\
+                // println!(\"hello world\");\n\
+                // }\n\
+            ";
         assert!(Scanner::new(source_code).next().is_none());
     }
 
     #[test]
-    fn test_dont_panic_on_terminating_comment() {
+    fn test_dont_panic_on_comment_at_end() {
         let source_code = "// asjdnasjdnasjd";
         assert!(Scanner::new(source_code).next().is_none());
+    }
+
+    #[test]
+    fn test_unterminated_string_error() {
+        let source_code = r#"
+                print 1 + "qwerty;
+            "#;
+        assert!(Scanner::new(source_code).try_scan_all().is_err());
     }
 }
