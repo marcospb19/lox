@@ -6,6 +6,7 @@ pub enum Expression {
     Binary(Box<BinaryExpression>),
     Grouping(Box<Expression>),
     Unary(Box<UnaryExpression>),
+    VariableReference(String),
 }
 
 #[derive(Debug)]

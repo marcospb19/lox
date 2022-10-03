@@ -52,11 +52,7 @@ impl Token {
     pub fn is_literal(&self) -> bool {
         matches!(
             self,
-            Token::Nil
-                | Token::Bool(_)
-                | Token::Identifier(_)
-                | Token::Number(_)
-                | Token::String(_)
+            Token::Nil | Token::Bool(_) | Token::Number(_) | Token::String(_)
         )
     }
 
@@ -173,6 +169,7 @@ impl Default for Position {
 
 impl fmt::Display for Position {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}:{}", self.line, self.column)
+        let Self { line, column } = self;
+        write!(f, "{line}:{column}")
     }
 }

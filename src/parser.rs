@@ -1,9 +1,14 @@
 //! This Token parser is an Ast builder
 //!
-//! Grammar:
+//! Outdated grammar:
 //!
 //! ```txt
-//!   program        → statement* EOF ;
+//!   program        → declaration* EOF ;
+//!
+//!   declaration    → varDecl
+//!                  | statement ;
+//!
+//!   varDecl        → "var" IDENTIFIER ( "=" expression )? ";" ;
 //!
 //!   statement      → exprStmt
 //!                    | printStmt ;
@@ -18,7 +23,10 @@
 //!   factor         → unary ( ( "/" | "*" ) unary )* ;
 //!   unary          → ( "!" | "-" ) unary
 //!                    | literal ;
-//!   literal        → NUMBER | STRING | "true" | "false" | "nil"
+//!   primary        → "true" | "false" | "nil"
+//!                    | NUMBER | STRING
+//!                    | "(" expression ")"
+//!                    | IDENTIFIER ;
 //! ```
 
 use std::slice;
@@ -26,7 +34,7 @@ use std::slice;
 use crate::{
     expression::{BinaryExpression, Expression, LiteralExpression, UnaryExpression},
     statement::Statement,
-    token::{Token, Token::*},
+    token::Token::{self, *},
     ParserErrorReporter,
 };
 
@@ -50,7 +58,7 @@ impl<'a> Parser<'a> {
         let mut statements = vec![];
 
         while self.peek().is_some() {
-            let parsed_statement = self.parse_statement();
+            let parsed_statement = self.parse_declaration();
             match parsed_statement {
                 Some(statement) => statements.push(statement),
                 None => self.synchronize_after_error(),
@@ -86,8 +94,35 @@ impl<'a> Parser<'a> {
         None
     }
 
-    pub fn parse_expression(&mut self) -> Option<Expression> {
-        self.equality()
+    fn parse_declaration(&mut self) -> Option<Statement> {
+        if self.matches(&[Token::Var]).is_some() {
+            self.parse_var_declaration()
+        } else {
+            self.parse_statement()
+        }
+    }
+
+    fn parse_var_declaration(&mut self) -> Option<Statement> {
+        let identifier = if let Some(Token::Identifier(identifier)) = self.peek().cloned() {
+            self.advance_token();
+            identifier
+        } else {
+            panic!("report this error   'Expect VariableReference name.'");
+            // return None;
+        };
+
+        let initial_value = match self.matches(&[Token::Equal]) {
+            Some(_) => Some(self.parse_expression()?),
+            None => None,
+        };
+
+        assert_eq!(
+            self.advance_token(),
+            Some(&Token::Semicolon),
+            "expected semicolon"
+        );
+
+        Some(Statement::VariableDeclaration(identifier, initial_value))
     }
 
     fn parse_statement(&mut self) -> Option<Statement> {
@@ -120,6 +155,10 @@ impl<'a> Parser<'a> {
                 None
             }
         }
+    }
+
+    fn parse_expression(&mut self) -> Option<Expression> {
+        self.equality()
     }
 
     // Helper function to build binary expression parser steps in this form:
@@ -171,17 +210,19 @@ impl<'a> Parser<'a> {
                 operator, expression,
             )))
         } else {
-            self.parse_literal()
+            self.parse_primary()
         }
     }
 
-    fn parse_literal(&mut self) -> Option<Expression> {
+    fn parse_primary(&mut self) -> Option<Expression> {
         let token = match self.tokens_iter.next() {
             Some(token) => token,
-            None => todo!("expected literal, found EOF"),
+            None => todo!("expected something, found EOF"),
         };
 
-        if token.is_literal() {
+        if let Token::Identifier(identifier) = token {
+            Some(Expression::VariableReference(identifier.clone()))
+        } else if token.is_literal() {
             Some(Expression::Literal(LiteralExpression::new(token.clone())))
         } else if token == &Token::LeftParen {
             // Eat next expression

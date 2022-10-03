@@ -10,6 +10,13 @@ impl Display for Statement {
         match self {
             Self::Expression(inner) => write!(f, "(expression {inner})"),
             Self::Print(inner) => write!(f, "(print {inner})"),
+            Self::VariableDeclaration(identifier, initial_value) => {
+                write!(f, "(var {identifier} (")?;
+                if let Some(initial_value) = initial_value {
+                    write!(f, "{initial_value}")?;
+                }
+                write!(f, "))")
+            }
         }
     }
 }
@@ -17,7 +24,8 @@ impl Display for Statement {
 impl Display for Expression {
     fn fmt(&self, f: &mut Formatter) -> Result {
         let self_variant: &dyn Display = match self {
-            Self::Grouping(inner) => return write!(f, "(group {})", inner),
+            Self::Grouping(inner) => return write!(f, "(group {inner})"),
+            Self::VariableReference(identifier) => return write!(f, "(value_of {identifier})"),
             Self::Literal(inner) => inner,
             Self::Binary(inner) => inner,
             Self::Unary(inner) => inner,

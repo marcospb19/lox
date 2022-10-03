@@ -1,4 +1,4 @@
-use std::ops::Not;
+use std::{collections::HashMap, ops::Not};
 
 use crate::{
     expression::{BinaryExpression, Expression, LiteralExpression, UnaryExpression},
@@ -6,17 +6,43 @@ use crate::{
     token::Token,
 };
 
-pub fn interpret_program(statements: Vec<Statement>) -> Result<(), RuntimeError> {
+pub fn interpret_program(
+    statements: Vec<Statement>,
+    environment: &mut Environment,
+) -> Result<(), RuntimeError> {
     for statement in statements {
-        let expression = statement.evaluate()?;
+        let expression = statement.evaluate(environment)?;
         println!("evaluated: {expression:?}");
     }
 
     Ok(())
 }
 
+#[derive(Default, Debug)]
+pub struct Environment {
+    variables: HashMap<String, Option<Value>>,
+}
+
+impl Environment {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    fn define(&mut self, identifier: String) {
+        self.variables.insert(identifier, None);
+    }
+
+    fn set_value(&mut self, identifier: String, value: Value) {
+        self.variables.insert(identifier, Some(value));
+    }
+
+    fn get_value(&self, identifier: &str) -> Option<Option<Value>> {
+        self.variables.get(identifier).cloned()
+    }
+}
+
 pub trait Interpret {
-    fn evaluate(&self) -> Result<Value, RuntimeError>;
+    fn evaluate(&self, environment: &mut Environment) -> Result<Value, RuntimeError>;
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -37,36 +63,58 @@ impl Value {
 }
 
 impl Interpret for Statement {
-    fn evaluate(&self) -> Result<Value, RuntimeError> {
+    fn evaluate(&self, environment: &mut Environment) -> Result<Value, RuntimeError> {
         match self {
-            Self::Expression(inner) | Self::Print(inner) => inner.evaluate(),
+            Self::Expression(inner) => inner.evaluate(environment),
+            Self::Print(inner) => {
+                print!("print ");
+                inner.evaluate(environment)
+            }
+            Statement::VariableDeclaration(identifier, initial_value_expression) => {
+                match initial_value_expression {
+                    Some(expression) => {
+                        let value = expression.evaluate(environment)?;
+                        environment.set_value(identifier.clone(), value);
+                    }
+                    None => {
+                        environment.define(identifier.clone());
+                    }
+                };
+
+                Ok(Value::Nil)
+            }
         }
     }
 }
 
 impl Interpret for Expression {
-    fn evaluate(&self) -> Result<Value, RuntimeError> {
+    fn evaluate(&self, environment: &mut Environment) -> Result<Value, RuntimeError> {
         let self_variant: &dyn Interpret = match self {
             Self::Literal(inner) => inner,
             Self::Binary(inner) => inner.as_ref(),
             Self::Grouping(inner) => inner.as_ref(),
             Self::Unary(inner) => inner.as_ref(),
+            Self::VariableReference(identifier) => {
+                return match environment.get_value(identifier) {
+                    Some(Some(value)) => Ok(value),
+                    Some(None) => Err(RuntimeError::UninitializedVariable(identifier.clone())),
+                    None => Err(RuntimeError::UndefinedVariable(identifier.clone())),
+                };
+            }
         };
 
-        Interpret::evaluate(self_variant)
+        Interpret::evaluate(self_variant, environment)
     }
 }
 
 impl Interpret for LiteralExpression {
-    fn evaluate(&self) -> Result<Value, RuntimeError> {
+    fn evaluate(&self, _environment: &mut Environment) -> Result<Value, RuntimeError> {
         let value = match &self.value {
             Token::String(inner) => Value::String(inner.to_owned()),
             Token::Number(inner) => Value::Number(*inner),
             Token::Bool(inner) => Value::Bool(*inner),
             Token::Nil => Value::Nil,
-            // todo
-            Token::Identifier(_inner) => todo!("2"),
-            _ => todo!("1"),
+            _ => unreachable!(),
         };
 
         Ok(value)
@@ -74,14 +122,14 @@ impl Interpret for LiteralExpression {
 }
 
 impl Interpret for BinaryExpression {
-    fn evaluate(&self) -> Result<Value, RuntimeError> {
+    fn evaluate(&self, environment: &mut Environment) -> Result<Value, RuntimeError> {
         let Self {
             left,
             operator,
             right,
         } = self;
 
-        let (lhs, rhs) = (left.evaluate()?, right.evaluate()?);
+        let (lhs, rhs) = (left.evaluate(environment)?, right.evaluate(environment)?);
 
         let value = match operator {
             Token::Minus => {
@@ -131,13 +179,13 @@ impl Interpret for BinaryExpression {
 }
 
 impl Interpret for UnaryExpression {
-    fn evaluate(&self) -> Result<Value, RuntimeError> {
+    fn evaluate(&self, environment: &mut Environment) -> Result<Value, RuntimeError> {
         let Self {
             operator,
             expression,
         } = self;
 
-        let value = expression.evaluate()?;
+        let value = expression.evaluate(environment)?;
 
         let value = match operator {
             Token::Bang => Value::Bool(is_truthy(value).not()),
@@ -161,18 +209,6 @@ fn is_truthy(value: Value) -> bool {
     matches!(value, Value::Nil | Value::Bool(false)).not()
 }
 
-//  extends RuntimeException {
-//   final Token token;
-//   RuntimeError(Token token, String message) {
-//     super(message);
-//     this.token = token;
-//   }
-// }
-
-//  private void checkNumberOperands(Token operator, Object left, Object right) {
-//    if (left instanceof Double && right instanceof Double) return;
-//    throw new RuntimeError(operator, "Operands must be numbers.");
-//  }
 fn check_number_operands(
     operator: &Token,
     lhs_val: &Value,
@@ -202,10 +238,14 @@ fn check_number_operands(
 pub enum RuntimeError {
     #[error("Expected number after unary operator '{0}'")]
     UnaryExpressionExpectedNumber(Token, Value),
-    #[error("oi")]
+    #[error("Expected number after binary operator '{0}', found {1:?} instead.")]
     BinaryExpressionExpectedNumberAtRight(Token, Value),
-    #[error("oi")]
+    #[error("Expected number before binary operator '{0}', found {1:?} instead.")]
     BinaryExpressionExpectedNumberAtLeft(Token, Value),
-    #[error("oi")]
+    #[error("Operator '{0}' should be surrounded by numbers, found {1:?} and {2:?} instead.")]
     BinaryExpressionExpectedNumberBothSides(Token, Value, Value),
+    #[error("variable '{0}' is not defined")]
+    UndefinedVariable(String),
+    #[error("variable '{0}' is defined but uninitialized")]
+    UninitializedVariable(String),
 }

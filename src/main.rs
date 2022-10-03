@@ -23,7 +23,7 @@ use fs_err as fs;
 use crate::{
     error::{ParserErrorReporter, Result},
     expression::Expression,
-    interpreter::interpret_program,
+    interpreter::{interpret_program, Environment},
     lexer::Scanner,
     parser::Parser,
 };
@@ -50,6 +50,8 @@ fn run() -> Result<()> {
 }
 
 fn start_repl() -> Result<()> {
+    let mut state = Environment::new();
+
     loop {
         print!("> ");
         io::stdout().flush()?;
@@ -62,7 +64,7 @@ fn start_repl() -> Result<()> {
         }
 
         // If errors appear, report them and keep the REPL running.
-        match interpret_lox(&line) {
+        match interpret_lox_with_state(&line, &mut state) {
             Ok(_) => {}
             Err(err) => eprintln!("{err}"),
         }
@@ -77,8 +79,13 @@ fn interpret_lox_file(path: &Path) -> Result<()> {
 }
 
 fn interpret_lox(text: &str) -> Result<()> {
+    let mut environment = Environment::new();
+    interpret_lox_with_state(text, &mut environment)
+}
+
+fn interpret_lox_with_state(text: &str, state: &mut Environment) -> Result<()> {
     let tokens = Scanner::new(text).try_scan_all()?;
     let statements = Parser::new(&tokens).try_parse()?;
 
-    interpret_program(statements).map_err(From::from)
+    interpret_program(statements, state).map_err(From::from)
 }
